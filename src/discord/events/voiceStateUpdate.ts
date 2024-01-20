@@ -27,9 +27,19 @@ new Event({
                 },
             });
 
-            const audioList = await db.guilds.get(`${newMember.member?.guild.id}.logs.joinAlert.audios`) as any[];
+            const audioList: {
+                url?: string | undefined;
+                name?: string | undefined;
+            }[] | null= await db.guilds.get(`${newChannel.guildId}.logs.joinAlert.audios`);
 
-            const audio = audioList[Math.floor(Math.random() * audioList.length)];
+            if(audioList === null) return;
+
+            const audio = await audioList![Math.floor(Math.random() * audioList!.length)] as {
+                url: string;
+                name: string;
+            };
+
+            log.info(ck.yellow(`ID do canal ${audioList}`));
 
             const connection = joinVoiceChannel({
                 channelId: newChannel?.id || "",
@@ -49,7 +59,7 @@ new Event({
             await db.guilds.get(`${newMember.member?.guild.id}.logs.channel.id`).then(async (channelId) => {
                 if(channelId === undefined) return;
 
-                const channel = await newMember.member?.guild.channels.fetch(channelId as string);
+                const channel = await newMember.guild.channels.cache.get(channelId as string);
 
 
                 if(channel === undefined) return;

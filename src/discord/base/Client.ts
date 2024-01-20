@@ -61,10 +61,6 @@ async function whenReady(client: Client<true>){
     )
     .then(() => log.success(ck.green("Commands registered successfully!")))
     .catch(log.error);
-
-    client.guilds.cache.get("1192019250727100476")?.commands.set(
-        Array.from(Command.commands.values())
-    );
 }
 function onCommand(commandInteraction: CommandInteraction){
     const command = Command.commands.get(commandInteraction.commandName);
