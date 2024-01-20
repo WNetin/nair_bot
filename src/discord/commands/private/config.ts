@@ -1,8 +1,9 @@
 import { db } from "@/database";
 import { Command } from "@/discord/base";
 import { settings } from "@/settings";
-import { hexToRgb } from "@magicyan/discord";
-import { ApplicationCommandOptionType, ApplicationCommandType, ChannelType, EmbedBuilder } from "discord.js";
+import { SelectMenuBuilder } from "@discordjs/builders";
+import { createRow, hexToRgb } from "@magicyan/discord";
+import { APISelectMenuOption, ApplicationCommandOptionType, ApplicationCommandType, ChannelType, ComponentType, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from "discord.js";
 
 new Command({
     name: "config",
@@ -117,7 +118,7 @@ new Command({
                     ]
                 },
                 {
-                    name: "audios",
+                    name: "audios_add",
                     description: "Set join alert audios",
                     type: ApplicationCommandOptionType.Subcommand,
                     options: [
@@ -134,6 +135,11 @@ new Command({
                             required
                         }
                     ]
+                },
+                {
+                    name: "audios_remove",
+                    description: "Set join alert audios",
+                    type: ApplicationCommandOptionType.Subcommand,
                 }
             ]
         }
@@ -255,7 +261,7 @@ new Command({
                         interaction.reply({ embeds: [embed] });
                         return;
                     }
-                    case "audios":{
+                    case "audios_add":{
                         const url = options.getString("url", true);
                         const name = options.getString("name", true);
 
@@ -275,6 +281,41 @@ new Command({
 
                         interaction.reply({ embeds: [embed] });
                         return;
+                    }
+                    case "audios_remove":{
+                        //create a select menu with all audios
+                        const audios:{
+                            url?: string | undefined,
+                            name?: string | undefined
+                        }[] | null = await db.guilds.get(guild.id + ".logs.joinAlert.audios");
+
+                        if(!audios) return interaction.reply({ content: "Não há audios" });
+
+                        const options:StringSelectMenuOptionBuilder[] = [];
+
+                        audios.map((audio, index) => {
+                            const option = new StringSelectMenuOptionBuilder()
+                            .setLabel(audio.name as string)
+                            .setValue(JSON.stringify(audio))
+                            .setDescription(audio.url as string)
+                            .setEmoji("🎵");
+
+                            options.push(option);
+                        });
+
+                        const embed = new EmbedBuilder({
+                            title: "Selecione um audio para remover",
+                            color: hexToRgb(settings.colors.theme.azoxo),
+                            footer:{
+                                text: `definido por ${interaction.user.tag}`
+                            }
+                        });
+
+                        const row = createRow(
+                            new StringSelectMenuBuilder({  placeholder: "Selecione um audio" }).addOptions(options).setCustomId("selectAudiotoRemove")
+                        );
+
+                        interaction.reply({ embeds: [embed], components: [row] });
                     }
             }
         }
