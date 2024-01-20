@@ -1,7 +1,7 @@
 import { Command } from "@/discord/base";
 import { settings } from "@/settings";
 import { hexToRgb } from "@magicyan/discord";
-import { ApplicationCommandOptionType, ApplicationCommandType, EmbedBuilder, TextBasedChannel, TextChannel } from "discord.js";
+import { ApplicationCommandOptionType, ApplicationCommandType, EmbedBuilder, TextBasedChannel, TextChannel, WebhookClient } from "discord.js";
 
 new Command({
     name: "clone",
@@ -33,14 +33,6 @@ new Command({
         if(interaction.channel instanceof TextChannel){
             const channel = interaction.channel;
 
-            await channel.createWebhook({
-                name: user.username,
-                avatar: user.avatarURL()
-            }).then(webhook => {
-                webhook.send(message);
-                webhook.delete();
-            });
-
             const embed = new EmbedBuilder({
                 title: "Clone",
                 description: `User: ${user}\nMessage: ${message}`,
@@ -51,6 +43,17 @@ new Command({
             });
 
             interaction.reply({ embeds: [embed], ephemeral: true });
+
+            const webhook = new WebhookClient({
+                url: await channel.createWebhook({
+                    name: user.displayName,
+                    avatar: user.avatarURL()
+                }).then(webhook => webhook.url)
+            });
+
+            await webhook.send(message);
+            webhook.delete();
+
         }
     }
 });
