@@ -1,77 +1,108 @@
 import { log, settings } from "@/settings";
 import { Event } from "@discord/base";
-import { AudioPlayerStatus, DiscordGatewayAdapterCreator, NoSubscriberBehavior, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel } from "@discordjs/voice";
+import {
+  AudioPlayerStatus,
+  DiscordGatewayAdapterCreator,
+  NoSubscriberBehavior,
+  createAudioPlayer,
+  createAudioResource,
+  getVoiceConnection,
+  joinVoiceChannel,
+} from "@discordjs/voice";
 import { hexToRgb, sleep } from "@magicyan/discord";
 import ytdl from "ytdl-core";
 import ck from "chalk";
-import { EmbedBuilder, StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import {
+  EmbedBuilder,
+  StageChannel,
+  TextChannel,
+  VoiceChannel,
+} from "discord.js";
 import { db } from "@/database";
 
 new Event({
-    name: "voiceStateUpdate", once: false,
-    async run(oldMember, newMember) {
-        if(oldMember.member?.user.bot) return;
+  name: "voiceStateUpdate",
+  once: false,
+  async run(oldMember, newMember) {
+    if (oldMember.member?.user.bot) return;
+    if (!newMember.channel) return;
+    if (newMember.member?.voice.channel instanceof VoiceChannel !== true)
+      return;
+    if(oldMember.channelId === newMember.channelId) return;
 
-        let newChannel = newMember.member?.voice.channel;
-        let oldChannel = oldMember.member?.voice.channel;
+    let newChannel = newMember.member?.voice.channel;
 
-        if(newChannel instanceof StageChannel) return;
+    log.info(
+      ck.yellow(
+        `${newMember.member?.user.username} entrou no canal ${newChannel?.name}`
+      )
+    );
+    if (
+      ((await db.guilds.get(
+        `${newMember.member?.guild.id}.logs.joinAlert.on`
+      )) as boolean) !== true
+    )
+      return;
 
-        if(newChannel instanceof VoiceChannel){
-            log.info(ck.yellow(`${newMember.member?.user.username} entrou no canal ${newChannel?.name}`));
-            if(await db.guilds.get(`${newMember.member?.guild.id}.logs.joinAlert.on`) as boolean !== true) return;
+    const player = createAudioPlayer({
+      behaviors: {
+        noSubscriber: NoSubscriberBehavior.Pause,
+      },
+    });
 
-            const player = createAudioPlayer({
-                behaviors: {
-                    noSubscriber: NoSubscriberBehavior.Pause,
-                },
-            });
+    const audioList:
+      | {
+          url?: string | undefined;
+          name?: string | undefined;
+        }[]
+      | null = await db.guilds.get(
+      `${newChannel.guildId}.logs.joinAlert.audios`
+    );
 
-            const audioList: {
-                url?: string | undefined;
-                name?: string | undefined;
-            }[] | null= await db.guilds.get(`${newChannel.guildId}.logs.joinAlert.audios`);
+    if (audioList === null) return;
 
-            if(audioList === null) return;
+    const audio = (await audioList![
+      Math.floor(Math.random() * audioList!.length)
+    ]) as {
+      url: string;
+      name: string;
+    };
 
-            const audio = await audioList![Math.floor(Math.random() * audioList!.length)] as {
-                url: string;
-                name: string;
-            };
+    const connection = joinVoiceChannel({
+      channelId: newChannel?.id || "",
+      guildId: newChannel?.guild.id || "",
+      adapterCreator: newChannel?.guild
+        .voiceAdapterCreator as DiscordGatewayAdapterCreator,
+    });
+    const resource = createAudioResource(
+      ytdl(audio.url, { filter: "audioonly" })
+    );
+    player.play(resource);
 
-            log.info(ck.yellow(`ID do canal ${audioList}`));
+    connection.subscribe(player);
 
-            const connection = joinVoiceChannel({
-                channelId: newChannel?.id || "",
-                guildId: newChannel?.guild.id || "",
-                adapterCreator: newChannel?.guild.voiceAdapterCreator as DiscordGatewayAdapterCreator,
-            });
-            const resource = createAudioResource(ytdl(audio.url, { filter: "audioonly" }));
-            player.play(resource);
+    player.on(AudioPlayerStatus.Idle, async () => {
+      await sleep(500);
+      connection.destroy();
+    });
 
-            connection.subscribe(player);
+    await db.guilds
+      .get(`${newMember.member?.guild.id}.logs.channel.id`)
+      .then(async (channelId) => {
+        if (channelId === undefined) return;
 
-            player.on(AudioPlayerStatus.Idle, async () => {
-                await sleep(500);
-                connection.destroy();
-            });
+        const channel = await newMember.guild.channels.cache.get(
+          channelId as string
+        );
 
-            await db.guilds.get(`${newMember.member?.guild.id}.logs.channel.id`).then(async (channelId) => {
-                if(channelId === undefined) return;
+        if (channel === undefined) return;
 
-                const channel = await newMember.guild.channels.cache.get(channelId as string);
-
-
-                if(channel === undefined) return;
-
-
-                const embed = new EmbedBuilder({
-                    title: "Alerta de Entrada Tocado com sucesso!",
-                    description: `O audio tocado foi ${audio.name}`,
-                    color: hexToRgb(settings.colors.theme.success),
-                });
-                (channel as TextChannel).send({embeds: [embed]});
-            });
-        }
-    },
+        const embed = new EmbedBuilder({
+          title: "Alerta de Entrada Tocado com sucesso!",
+          description: `O audio tocado foi ${audio.name}`,
+          color: hexToRgb(settings.colors.theme.success),
+        });
+        (channel as TextChannel).send({ embeds: [embed] });
+      });
+  },
 });
