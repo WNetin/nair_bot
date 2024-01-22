@@ -24,6 +24,9 @@ new Event({
   name: "voiceStateUpdate",
   once: false,
   async run(oldMember, newMember) {
+    if (newMember.member?.user.bot) {
+      newMember.member?.voice.setMute(false);
+    }
     if (oldMember.member?.user.bot) return;
     if (!newMember.channel) return;
     if (newMember.member?.voice.channel instanceof VoiceChannel !== true)
